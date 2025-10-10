@@ -46,8 +46,8 @@ int main() {
   // create sample data of e^x
   double fit_data_input[100];
   double fit_data_output[100];
-  for (size_t i = 0; i < OPT_ARRAY_SIZE(fit_data_input); i++) {
-    double x = map_range(i, 0, OPT_ARRAY_SIZE(fit_data_input), 0, 10);
+  for (size_t i = 0; i < ARRAY_SIZE(fit_data_input); i++) {
+    double x = map_range(i, 0, ARRAY_SIZE(fit_data_input), 0, 10);
     fit_data_input[i] = x;
     double y = exp(x);
     fit_data_output[i] = y;
@@ -56,10 +56,10 @@ int main() {
   // optimize error function
   double new_coffs[4];
   poly_approx_err_data_t poly_approx_err_data = {
-      fit_data_input, OPT_ARRAY_SIZE(fit_data_input), fit_data_output,
-      OPT_ARRAY_SIZE(fit_data_output)};
+      fit_data_input, ARRAY_SIZE(fit_data_input), fit_data_output,
+      ARRAY_SIZE(fit_data_output)};
   optimizer_minimize_func(&poly_approx_err_func_wrapper, &poly_approx_err_data,
-                          new_coffs, OPT_ARRAY_SIZE(new_coffs), 0.1, 0.01,
+                          new_coffs, ARRAY_SIZE(new_coffs), 0.1, 0.01,
                           10000);
 
   printf("new coffs are [%lf, %lf, %lf, %lf] \n", new_coffs[0], new_coffs[1],
@@ -67,10 +67,10 @@ int main() {
 
 
   // get the current error of our universal approximator
-  poly_approx_data_t poly_approx_data = {new_coffs, OPT_ARRAY_SIZE(new_coffs)};
+  poly_approx_data_t poly_approx_data = {new_coffs, ARRAY_SIZE(new_coffs)};
   double err_2 = err_func(&poly_approx_wrapper, &poly_approx_data,
-                          fit_data_input, OPT_ARRAY_SIZE(fit_data_input),
-                          fit_data_output, OPT_ARRAY_SIZE(fit_data_output));
+                          fit_data_input, ARRAY_SIZE(fit_data_input),
+                          fit_data_output, ARRAY_SIZE(fit_data_output));
   printf("error after optimization is %lf \n", err_2);
 
   printf("program end \n");

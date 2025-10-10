@@ -1,0 +1,216 @@
+#ifndef NEURAL_NET_H
+#define NEURAL_NET_H
+
+#include "stddef.h"
+#include "assert.h"
+#include "stdlib.h"
+
+typedef double (*activation_func_t)(double x);
+
+double nn_sigmoid(double x)
+{
+  return 1 / (1 + (exp(-x)));
+}
+double nn_relu(double x){
+  return fmax(0,x);
+}
+
+typedef struct
+{
+  double *weights;
+  size_t num_weights;
+  double bias;
+  double output;
+} nn_node_t;
+
+typedef struct
+{
+  nn_node_t *nodes;
+  size_t num_nodes;
+  activation_func_t activ_func;
+} nn_layer_t;
+
+typedef struct
+{
+  nn_layer_t *layers;
+  size_t num_layers;
+} nn_network_t;
+
+double nn_feedforward_node(nn_node_t *node, nn_layer_t *prev_layer, activation_func_t activ_func)
+{
+  assert(prev_layer->num_nodes == node->num_weights);
+
+  double output = node->bias;
+  for (size_t i = 0; i < prev_layer->num_nodes; i++)
+  {
+    assert(node->weights != NULL);
+    double w = node->weights[i];
+    assert(prev_layer->nodes != NULL);
+    double x = (prev_layer->nodes[i]).output;
+    output += w * x;
+  }
+  return (*activ_func)(output);
+}
+
+void nn_feedforward(nn_network_t *net)
+{
+  // i is the layer
+  // start from layer 1 since layer 0 is the inputs
+  for (size_t i = 1; i < net->num_layers; i++)
+  {
+    nn_layer_t *layer = &net->layers[i];
+    // j is the node index
+    for (size_t j = 0; j < layer->num_nodes; j++)
+    {
+      nn_node_t *node = &layer->nodes[j];
+      nn_layer_t *prev_layer = &net->layers[i - 1];
+      double output = nn_feedforward_node(node, prev_layer, layer->activ_func);
+
+      node->output = output;
+    }
+  }
+}
+
+void nn_set_inputs(nn_network_t *net, double *inputs, size_t num_inputs)
+{
+
+  nn_layer_t *first_layer = &net->layers[0];
+  assert(first_layer->num_nodes == num_inputs);
+
+  for (size_t i = 0; i < num_inputs; i++)
+  {
+    first_layer->nodes[i].output = inputs[i];
+  }
+}
+
+double nn_get_output(nn_network_t *net, size_t node_index)
+{
+  nn_layer_t *last_layer = &net->layers[net->num_layers - 1];
+  double output = last_layer->nodes[node_index].output;
+  return output;
+}
+
+typedef struct
+{
+  double *expected_inputs;     // 2d array
+  size_t num_inputs;           // num cols
+  size_t num_expected_inputs;  // num rows
+  double *expected_outputs;    // 2d array
+  size_t num_outputs;          // num cols
+  size_t num_expected_outputs; // num rows
+} nn_training_data;
+
+double nn_get_cost(nn_network_t *net, nn_training_data *td)
+{
+
+  nn_layer_t *last_layer = &net->layers[net->num_layers - 1];
+  nn_layer_t *first_layer = &net->layers[0];
+
+  assert(td->num_inputs == first_layer->num_nodes);
+  assert(td->num_outputs == last_layer->num_nodes);
+  assert(td->num_expected_inputs == td->num_expected_outputs);
+
+  double tot_err = 0;
+  // for each (input,output) pair calculate the err
+  for (size_t i = 0; i < td->num_expected_inputs; i++)
+  {
+    double *ex_input_data_point = (td->expected_inputs + i * td->num_inputs);
+    double *ex_output_data_point = (td->expected_outputs + i * td->num_outputs);
+    nn_set_inputs(net, ex_input_data_point, td->num_inputs);
+    nn_feedforward(net);
+    // for each value in neural network outputs
+    for (size_t j = 0; j < last_layer->num_nodes; j++)
+    {
+      double actual_output = nn_get_output(net, j);
+      double expected_output = ex_output_data_point[j];
+      double err = (actual_output - expected_output);
+      double err_squared = err * err;
+      // add to total error
+      tot_err += err_squared;
+    }
+  }
+  return tot_err;
+}
+
+double nn_rand_range(double min, double max)
+{
+  double scale = rand() / (double)RAND_MAX; /* [0, 1.0] */
+  return min + scale * (max - min);         /* [min, max] */
+}
+double nn_clamp(double d, double min, double max)
+{
+  const double t = d < min ? min : d;
+  return t > max ? max : t;
+}
+
+
+void nn_randomize_net(nn_network_t *net, double rand_range_min, double rand_range_max)
+{
+  // for each layer
+  for (size_t i = 0; i < net->num_layers; i++)
+  {
+    nn_layer_t *layer = &net->layers[i];
+    // for each node
+    for (size_t j = 0; j < layer->num_nodes; j++)
+    {
+      nn_node_t *node = &layer->nodes[j];
+      // for bias
+      node->bias = nn_rand_range(rand_range_min, rand_range_max);
+      // for each weight
+      for (size_t k = 0; k < node->num_weights; k++)
+      {
+        node->weights[k] = nn_rand_range(rand_range_min, rand_range_max);
+      }
+    }
+  }
+}
+
+void nn_optimize_iter(nn_network_t *net, nn_training_data *td, double clamp_min, double clamp_max, double delta, double rate)
+{
+  // for each layer
+  for (size_t i = 0; i < net->num_layers; i++)
+  {
+    nn_layer_t *layer = &net->layers[i];
+    // for each node
+    for (size_t j = 0; j < layer->num_nodes; j++)
+    {
+      nn_node_t *node = &layer->nodes[j];
+
+      // for bias
+      {
+        double val = nn_get_cost(net, td);
+        double arg = node->bias;
+        node->bias += delta;
+        double new_val = nn_get_cost(net, td);
+        double deriv = (new_val - val) / delta;
+        double new_bias = arg - (deriv * rate);
+        node->bias = nn_clamp(new_bias, clamp_min, clamp_max);
+      }
+      // for each weight
+      for (size_t k = 0; k < node->num_weights; k++)
+      {
+        double val = nn_get_cost(net, td);
+        double arg = node->weights[k];
+        node->weights[k] += delta;
+        double new_val = nn_get_cost(net, td);
+        double deriv = (new_val - val) / delta;
+        double new_weight = arg - (deriv * rate);
+        node->weights[k] = nn_clamp(new_weight, clamp_min, clamp_max);
+      }
+    }
+  }
+}
+
+void nn_optimize(nn_network_t *net, nn_training_data *td, double clamp_min, double clamp_max, double delta, double rate, size_t num_iters)
+{
+
+  // randomize weights and biases
+  nn_randomize_net(net, clamp_min, clamp_max);
+
+  for (size_t i = 0; i < num_iters; i++)
+  {
+    nn_optimize_iter(net, td, clamp_min, clamp_max, delta, rate);
+  }
+}
+
+#endif

@@ -15,7 +15,7 @@ int main() {
   // create sample data of e^x
   double fit_data_input[100];
   double fit_data_output[100];
-  for (size_t i = 0; i < OPT_ARRAY_SIZE(fit_data_input); i++) {
+  for (size_t i = 0; i < ARRAY_SIZE(fit_data_input); i++) {
     double x = i;
     fit_data_input[i] = x;
     double y = exp(x);
@@ -23,8 +23,8 @@ int main() {
   }
 
   double err = err_func(&exp_approximation, NULL, fit_data_input,
-                        OPT_ARRAY_SIZE(fit_data_input), fit_data_output,
-                        OPT_ARRAY_SIZE(fit_data_output));
+                        ARRAY_SIZE(fit_data_input), fit_data_output,
+                        ARRAY_SIZE(fit_data_output));
   printf("error of exp(x) approximation is %lf \n", err);
   return 0;
 }
