@@ -1,0 +1,1 @@
+plot 10.0*sin(x), "plot_data.txt" with lines

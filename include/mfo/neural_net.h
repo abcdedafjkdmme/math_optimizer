@@ -204,7 +204,7 @@ void nn_fit(nn_network_t *net, nn_training_data *td, double clamp_min, double cl
 
   // randomize weights and biases
   nn_randomize_net(net, clamp_min, clamp_max);
-
+  
   for (size_t i = 0; i < num_iters; i++)
   {
     nn_optimize_iter(net, td, clamp_min, clamp_max, delta, rate);

@@ -4,10 +4,16 @@
 #include "time.h"
 #include "memory.h"
 #include "math.h"
+#include <errno.h>
 
 #include "arrsize.h"
 #include "neural_net.h"
 #include "neural_net_wrapper.h"
+
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846	
+#endif
 
 double training_func(double x)
 {
@@ -37,6 +43,22 @@ void create_training_data(nn_training_data *td, double *expected_inputs, size_t 
   td->num_expected_outputs = num_data_points;
 }
 
+void create_plot_from_nn(nn_network_t *net, char *str_buf, size_t str_buf_size, size_t max_line_size, double x_min, double x_max, double num_points)
+{
+  char *current_line = str_buf;
+  for (size_t i = 0; i < num_points; i++)
+  {
+    double x = map_range((double)i, 0.0, (double)num_points, x_min, x_max);
+    double y = -1;
+    nn_predict(net, &x, 1, &y, 1);
+
+    assert((current_line - str_buf) < str_buf_size);
+    int chars_written = snprintf(current_line, max_line_size, "%g %g\n ", x, y);
+    assert(chars_written > 0);
+    current_line += chars_written - 1;
+  }
+}
+
 int main(int argc, char *argv[])
 {
   printf("program start\n");
@@ -51,8 +73,8 @@ int main(int argc, char *argv[])
   nn_network_t knet = {.layers = klayers, .num_layers = 0};
 
   nn_add_layer(&arena, &knet, ARRAY_SIZE(klayers), 1, NULL);
-  nn_add_layer(&arena, &knet, ARRAY_SIZE(klayers), 32, &nn_relu);
-  nn_add_layer(&arena, &knet, ARRAY_SIZE(klayers), 32, &nn_relu);
+  nn_add_layer(&arena, &knet, ARRAY_SIZE(klayers), 16, &nn_relu);
+  nn_add_layer(&arena, &knet, ARRAY_SIZE(klayers), 16, &nn_relu);
   nn_add_layer(&arena, &knet, ARRAY_SIZE(klayers), 1, &nn_identity);
 
   printf("neural network created\n");
@@ -64,26 +86,44 @@ int main(int argc, char *argv[])
   printf("new      (input,output) is (%lf, %lf)\n", inputs[0], outputs[0]);
   printf("expected (input,output) is (%lf, %lf)\n", inputs[0], training_func(inputs[0]));
 
+
+  // create training data
   nn_training_data td;
-  double expected_inputs[100];
-  double expected_outputs[100];
-  create_training_data(&td, expected_inputs, ARRAY_SIZE(expected_inputs), expected_outputs, ARRAY_SIZE(expected_outputs), 0, 2.0 * M_PI);
+  double expected_inputs[20];
+  double expected_outputs[20];
+  create_training_data(&td, expected_inputs, ARRAY_SIZE(expected_inputs), expected_outputs, ARRAY_SIZE(expected_outputs), -2.0 * M_PI, 2.0 * M_PI);
   printf("training data created\n");
+  // get the current error based on training data
   double err = nn_get_cost(&knet, &td);
   printf("err is %lf \n", err);
 
-  // optimize it now
+  // optimize the network
   nn_fit(&knet, &td, -1.0, 1.0, 0.00001, 0.001, 1000);
-  // get new error
+  // get new error after training
   err = nn_get_cost(&knet, &td);
   printf("new err is %lf \n", err);
 
-  // get new outputs
+  // get new outputs after training
   double inputs2[] = {2.0};
   double outputs2[1];
   nn_predict(&knet, inputs2, ARRAY_SIZE(inputs2), outputs2, ARRAY_SIZE(outputs2));
   printf("new      (input,output) is (%lf, %lf)\n", inputs2[0], outputs2[0]);
   printf("expected (input,output) is (%lf, %lf)\n", inputs2[0], training_func(inputs2[0]));
+
+  // create plot data
+  char plot_data_str[5000];
+  create_plot_from_nn(&knet, plot_data_str, ARRAY_SIZE(plot_data_str), 200, -2.0 * M_PI, 2.0 * M_PI, 100);
+  FILE* plot_data_file = fopen("plot_data.txt","w");
+  
+  if(plot_data_file == NULL){
+    printf("ERROR: can't create file %s \n", strerror(errno));
+    assert(1 == 0);
+  }
+  fputs(&plot_data_str , plot_data_file);
+  fclose(plot_data_file);
+
+  // open plot data in gnuplot
+  system("gnuplot -p data/plot.gp");
 
   nn_arena_destroy(&arena);
   printf("program end \n");
