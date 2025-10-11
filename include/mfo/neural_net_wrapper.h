@@ -1,0 +1,82 @@
+#ifndef NEURAL_NET_WRAPPER_H
+#define NEURAL_NET_WRAPPER_H
+
+#include "stddef.h"
+#include "assert.h"
+#include "memory.h"
+#include "stdlib.h"
+
+#include "neural_net.h"
+
+typedef struct
+{
+  size_t base;
+  size_t current;
+  size_t size;
+} nn_arena_t;
+
+void nn_arena_create(nn_arena_t *arena, size_t tot_size)
+{
+  arena->base = (size_t)malloc(tot_size);
+  arena->current = arena->base;
+  arena->size = tot_size;
+}
+void nn_arena_destroy(nn_arena_t *arena)
+{
+  free((void *)arena->base);
+  arena->base = 0;
+  arena->current = 0;
+}
+
+void *nn_arena_alloc(nn_arena_t *arena, size_t size)
+{
+  size_t old = arena->current;
+  arena->current += size;
+  assert(arena->current < arena->base + arena->size && "not enough memory in the arena");
+  return (void *)old;
+}
+
+void nn_create_layer(nn_arena_t *arena, nn_layer_t *created_layer, size_t num_prev_nodes, size_t num_nodes, nn_activation_func_t activ_func)
+{
+  nn_node_t *nodes_list = (nn_node_t *)nn_arena_alloc(arena, num_nodes * sizeof(nn_node_t));
+  for (size_t i = 0; i < num_nodes; i++)
+  {
+    nn_node_t node;
+    double *node_weights = (double *)nn_arena_alloc(arena, num_prev_nodes * sizeof(double));
+    memset(node_weights, 0, num_prev_nodes * sizeof(double));
+    node.weights = node_weights;
+    node.num_weights = num_prev_nodes;
+    node.bias = 0;
+    nodes_list[i] = node;
+  }
+
+  created_layer->nodes = nodes_list;
+  created_layer->num_nodes = num_nodes;
+  created_layer->activ_func = activ_func;
+}
+
+void nn_push_layer(nn_network_t *net, size_t num_allocated_layers, nn_layer_t *layer)
+{
+  assert(net->num_layers < num_allocated_layers && "not enough allocated layers");
+  net->num_layers++;
+  net->layers[net->num_layers - 1] = *layer;
+}
+
+void nn_add_layer(nn_arena_t *arena, nn_network_t *net, size_t num_allocated_layers, size_t num_nodes, nn_activation_func_t activ_func)
+{
+  size_t num_prev_nodes = 0;
+  if (net->num_layers == 0)
+  {
+    num_prev_nodes = num_nodes;
+  }
+  else
+  {
+    nn_layer_t *last_layer = nn_get_last_layer(net);
+    num_prev_nodes = last_layer->num_nodes;
+  }
+  nn_layer_t *created_layer = (nn_layer_t*)nn_arena_alloc(arena, sizeof(nn_layer_t));
+  nn_create_layer(arena, created_layer, num_prev_nodes, num_nodes, activ_func);
+  nn_push_layer(net, num_allocated_layers, created_layer);
+}
+
+#endif

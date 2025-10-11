@@ -4,16 +4,7 @@
 #include "stddef.h"
 #include "assert.h"
 #include "stdlib.h"
-
-typedef double (*activation_func_t)(double x);
-
-double nn_sigmoid(double x)
-{
-  return 1 / (1 + (exp(-x)));
-}
-double nn_relu(double x){
-  return fmax(0,x);
-}
+#include "math_utils.h"
 
 typedef struct
 {
@@ -23,11 +14,13 @@ typedef struct
   double output;
 } nn_node_t;
 
+typedef double (*nn_activation_func_t)(double x);
+
 typedef struct
 {
   nn_node_t *nodes;
   size_t num_nodes;
-  activation_func_t activ_func;
+  nn_activation_func_t activ_func;
 } nn_layer_t;
 
 typedef struct
@@ -36,7 +29,12 @@ typedef struct
   size_t num_layers;
 } nn_network_t;
 
-double nn_feedforward_node(nn_node_t *node, nn_layer_t *prev_layer, activation_func_t activ_func)
+nn_layer_t *nn_get_last_layer(nn_network_t *net)
+{
+  assert(net->num_layers > 0);
+  return &net->layers[net->num_layers - 1];
+}
+double nn_feedforward_node(nn_node_t *node, nn_layer_t *prev_layer, nn_activation_func_t activ_func)
 {
   assert(prev_layer->num_nodes == node->num_weights);
 
@@ -80,6 +78,18 @@ void nn_set_inputs(nn_network_t *net, double *inputs, size_t num_inputs)
   for (size_t i = 0; i < num_inputs; i++)
   {
     first_layer->nodes[i].output = inputs[i];
+  }
+}
+
+void nn_predict(nn_network_t *net, double *inputs, size_t num_inputs, double *outputs, size_t num_outputs)
+{
+  nn_set_inputs(net, inputs, num_inputs);
+  nn_feedforward(net);
+  nn_layer_t *last_layer = &net->layers[net->num_layers - 1];
+  assert(last_layer->num_nodes == num_outputs);
+  for (size_t i = 0; i < last_layer->num_nodes; i++)
+  {
+    outputs[i] = last_layer->nodes[i].output;
   }
 }
 
@@ -129,25 +139,13 @@ double nn_get_cost(nn_network_t *net, nn_training_data *td)
       tot_err += err_squared;
     }
   }
-  return tot_err;
+  return tot_err / (double)td->num_expected_outputs;
 }
-
-double nn_rand_range(double min, double max)
-{
-  double scale = rand() / (double)RAND_MAX; /* [0, 1.0] */
-  return min + scale * (max - min);         /* [min, max] */
-}
-double nn_clamp(double d, double min, double max)
-{
-  const double t = d < min ? min : d;
-  return t > max ? max : t;
-}
-
 
 void nn_randomize_net(nn_network_t *net, double rand_range_min, double rand_range_max)
 {
-  // for each layer
-  for (size_t i = 0; i < net->num_layers; i++)
+  // for each layer except for input layer
+  for (size_t i = 1; i < net->num_layers; i++)
   {
     nn_layer_t *layer = &net->layers[i];
     // for each node
@@ -167,8 +165,8 @@ void nn_randomize_net(nn_network_t *net, double rand_range_min, double rand_rang
 
 void nn_optimize_iter(nn_network_t *net, nn_training_data *td, double clamp_min, double clamp_max, double delta, double rate)
 {
-  // for each layer
-  for (size_t i = 0; i < net->num_layers; i++)
+  // for each layer except for input layer
+  for (size_t i = 1; i < net->num_layers; i++)
   {
     nn_layer_t *layer = &net->layers[i];
     // for each node
@@ -201,7 +199,7 @@ void nn_optimize_iter(nn_network_t *net, nn_training_data *td, double clamp_min,
   }
 }
 
-void nn_optimize(nn_network_t *net, nn_training_data *td, double clamp_min, double clamp_max, double delta, double rate, size_t num_iters)
+void nn_fit(nn_network_t *net, nn_training_data *td, double clamp_min, double clamp_max, double delta, double rate, size_t num_iters)
 {
 
   // randomize weights and biases
