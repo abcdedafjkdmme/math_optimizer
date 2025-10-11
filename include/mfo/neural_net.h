@@ -29,6 +29,11 @@ typedef struct
   size_t num_layers;
 } nn_network_t;
 
+nn_layer_t *nn_get_first_layer(nn_network_t *net)
+{
+  return &net->layers[0];
+}
+
 nn_layer_t *nn_get_last_layer(nn_network_t *net)
 {
   assert(net->num_layers > 0);
@@ -110,7 +115,31 @@ typedef struct
   size_t num_expected_outputs; // num rows
 } nn_training_data;
 
-double nn_get_cost(nn_network_t *net, nn_training_data *td)
+typedef double (*nn_cost_func_impl_t)(nn_network_t *net, double *ex_input_data_point, double *ex_output_data_point);
+
+double nn_cost_func_mse(nn_network_t *net, double *ex_input_data_point, double *ex_output_data_point)
+{
+
+  size_t num_inputs = nn_get_first_layer(net)->num_nodes;
+  nn_set_inputs(net, ex_input_data_point, num_inputs);
+  nn_feedforward(net);
+
+  // for each value in neural network outputs
+  double tot_err = 0;
+  for (size_t j = 0; j < nn_get_last_layer(net)->num_nodes; j++)
+  {
+
+    double actual_output = nn_get_output(net, j);
+    double expected_output = ex_output_data_point[j];
+    double err = (actual_output - expected_output);
+    double err_squared = err * err;
+    // add to total error
+    tot_err += err_squared;
+  }
+  return tot_err;
+}
+
+double nn_get_cost(nn_network_t *net, nn_training_data *td, nn_cost_func_impl_t cost_func)
 {
 
   nn_layer_t *last_layer = &net->layers[net->num_layers - 1];
@@ -126,18 +155,8 @@ double nn_get_cost(nn_network_t *net, nn_training_data *td)
   {
     double *ex_input_data_point = (td->expected_inputs + i * td->num_inputs);
     double *ex_output_data_point = (td->expected_outputs + i * td->num_outputs);
-    nn_set_inputs(net, ex_input_data_point, td->num_inputs);
-    nn_feedforward(net);
-    // for each value in neural network outputs
-    for (size_t j = 0; j < last_layer->num_nodes; j++)
-    {
-      double actual_output = nn_get_output(net, j);
-      double expected_output = ex_output_data_point[j];
-      double err = (actual_output - expected_output);
-      double err_squared = err * err;
-      // add to total error
-      tot_err += err_squared;
-    }
+    double err = (*cost_func)(net, ex_input_data_point, ex_output_data_point);
+    tot_err += err;
   }
   return tot_err / (double)td->num_expected_outputs;
 }
@@ -163,7 +182,7 @@ void nn_randomize_net(nn_network_t *net, double rand_range_min, double rand_rang
   }
 }
 
-void nn_optimize_iter(nn_network_t *net, nn_training_data *td, double clamp_min, double clamp_max, double delta, double rate)
+void nn_optimize_iter(nn_network_t *net, nn_training_data *td, nn_cost_func_impl_t cost_func, double clamp_min, double clamp_max, double delta, double rate)
 {
   // for each layer except for input layer
   for (size_t i = 1; i < net->num_layers; i++)
@@ -176,10 +195,10 @@ void nn_optimize_iter(nn_network_t *net, nn_training_data *td, double clamp_min,
 
       // for bias
       {
-        double val = nn_get_cost(net, td);
+        double val = nn_get_cost(net, td, cost_func);
         double arg = node->bias;
         node->bias += delta;
-        double new_val = nn_get_cost(net, td);
+        double new_val = nn_get_cost(net, td, cost_func);
         double deriv = (new_val - val) / delta;
         double new_bias = arg - (deriv * rate);
         node->bias = nn_clamp(new_bias, clamp_min, clamp_max);
@@ -187,10 +206,10 @@ void nn_optimize_iter(nn_network_t *net, nn_training_data *td, double clamp_min,
       // for each weight
       for (size_t k = 0; k < node->num_weights; k++)
       {
-        double val = nn_get_cost(net, td);
+        double val = nn_get_cost(net, td, cost_func);
         double arg = node->weights[k];
         node->weights[k] += delta;
-        double new_val = nn_get_cost(net, td);
+        double new_val = nn_get_cost(net, td, cost_func);
         double deriv = (new_val - val) / delta;
         double new_weight = arg - (deriv * rate);
         node->weights[k] = nn_clamp(new_weight, clamp_min, clamp_max);
@@ -199,15 +218,15 @@ void nn_optimize_iter(nn_network_t *net, nn_training_data *td, double clamp_min,
   }
 }
 
-void nn_fit(nn_network_t *net, nn_training_data *td, double clamp_min, double clamp_max, double delta, double rate, size_t num_iters)
+void nn_fit(nn_network_t *net, nn_training_data *td, nn_cost_func_impl_t cost_func, double clamp_min, double clamp_max, double delta, double rate, size_t num_iters)
 {
 
   // randomize weights and biases
   nn_randomize_net(net, clamp_min, clamp_max);
-  
+
   for (size_t i = 0; i < num_iters; i++)
   {
-    nn_optimize_iter(net, td, clamp_min, clamp_max, delta, rate);
+    nn_optimize_iter(net, td, cost_func, clamp_min, clamp_max, delta, rate);
   }
 }
 
