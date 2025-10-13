@@ -15,16 +15,6 @@ double nn_clamp(double d, double min, double max)
   return t > max ? max : t;
 }
 
-double nn_sigmoid(double x)
-{
-  return 1 / (1 + (exp(-x)));
-}
-double nn_relu(double x){
-  return fmax(0,x);
-}
-double nn_identity(double x){
-  return x;
-}
 
 double map_range(double x, double x_min, double x_max, double y_min,
                  double y_max) {
