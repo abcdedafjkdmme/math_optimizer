@@ -5,6 +5,7 @@
 #include "assert.h"
 #include "stdlib.h"
 #include "math_utils.h"
+#include "arena.h"
 
 typedef struct
 {
@@ -182,7 +183,7 @@ void nn_randomize_net(nn_network_t *net, double rand_range_min, double rand_rang
   }
 }
 
-void nn_optimize_iter(nn_network_t *net, nn_training_data *td, nn_cost_func_impl_t cost_func, double clamp_min, double clamp_max, double delta, double rate)
+void nn_optimize_iter(nn_network_t *net, nn_training_data *td, nn_cost_func_impl_t cost_func, double delta, double rate, double clamp_min, double clamp_max)
 {
   // for each layer except for input layer
   for (size_t i = 1; i < net->num_layers; i++)
@@ -218,7 +219,7 @@ void nn_optimize_iter(nn_network_t *net, nn_training_data *td, nn_cost_func_impl
   }
 }
 
-void nn_fit(nn_network_t *net, nn_training_data *td, nn_cost_func_impl_t cost_func, double clamp_min, double clamp_max, double delta, double rate, size_t num_iters)
+void nn_fit(nn_network_t *net, nn_training_data *td, nn_cost_func_impl_t cost_func, double delta, double rate, size_t num_iters, double clamp_min, double clamp_max)
 {
 
   // randomize weights and biases
@@ -226,7 +227,65 @@ void nn_fit(nn_network_t *net, nn_training_data *td, nn_cost_func_impl_t cost_fu
 
   for (size_t i = 0; i < num_iters; i++)
   {
-    nn_optimize_iter(net, td, cost_func, clamp_min, clamp_max, delta, rate);
+    nn_optimize_iter(net, td, cost_func, delta, rate, clamp_min, clamp_max);
+ }
+}
+
+[[deprecated("This doesnt shuffle data. Use nn_create_sgd_training_data_correct")]]
+void nn_create_sgd_training_data(nn_training_data *td, nn_training_data *td_sgd, size_t num_mini_batches)
+{
+  size_t total_data_points = td->num_expected_inputs;
+  assert(num_mini_batches < total_data_points);
+
+  *td_sgd = *td;
+
+  td_sgd->num_expected_inputs = num_mini_batches;
+  td_sgd->num_expected_outputs = num_mini_batches;
+
+  // wrong. doesnt shuffle data
+  size_t new_idx = (size_t)nn_rand_range(0, (double)((total_data_points - num_mini_batches) - 1));
+  td_sgd->expected_inputs += new_idx * td->num_inputs;
+  td_sgd->expected_outputs += new_idx * td->num_outputs;
+}
+
+void nn_create_sgd_training_data_correct(nn_arena_t *arena, nn_training_data *td, nn_training_data *td_sgd, size_t num_mini_batches)
+{
+  size_t total_data_points = td->num_expected_inputs;
+  assert(num_mini_batches < total_data_points);
+
+  td_sgd->num_inputs = td->num_inputs;
+  td_sgd->num_outputs = td->num_outputs;
+
+  td_sgd->num_expected_inputs = num_mini_batches;
+  td_sgd->num_expected_outputs = num_mini_batches;
+
+  double *new_expected_inputs = nn_arena_alloc(arena, num_mini_batches * td->num_inputs * sizeof(double));
+  double *new_expected_outputs = nn_arena_alloc(arena, num_mini_batches * td->num_outputs * sizeof(double));
+
+  // bad implementatino of a sample
+  for (size_t i = 0; i < num_mini_batches; i++)
+  {
+    size_t j = nn_rand_range(0, total_data_points - 1);
+    new_expected_inputs[i] = td->expected_inputs[j];
+    memcpy(new_expected_inputs + i * td->num_inputs, td->expected_inputs + j * td->num_inputs, td->num_inputs * sizeof(double));
+    memcpy(new_expected_outputs + i * td->num_outputs, td->expected_outputs + j * td->num_outputs, td->num_outputs * sizeof(double));
+  }
+
+  td_sgd->expected_inputs = new_expected_inputs;
+  td_sgd->expected_outputs = new_expected_outputs;
+}
+
+void nn_fit_sgd(nn_network_t *net, nn_training_data *td, size_t num_mini_batches, nn_cost_func_impl_t cost_func, double delta, double rate, size_t num_iters, double clamp_min, double clamp_max)
+{
+
+  // randomize weights and biases
+  nn_randomize_net(net, clamp_min, clamp_max);
+
+  for (size_t i = 0; i < num_iters; i++)
+  {
+    nn_training_data td_new;
+    nn_create_sgd_training_data(td, &td_new, num_mini_batches);
+    nn_optimize_iter(net, &td_new, cost_func, delta, rate, clamp_min, clamp_max);
   }
 }
 
