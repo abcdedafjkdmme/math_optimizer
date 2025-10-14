@@ -116,14 +116,14 @@ int main()
   // optimize the network
   double clamp_min = -1.0;
   double clamp_max = 1.0;
-  size_t num_iters = 1000;
+#define NUM_ITERS 1000
   size_t num_mini_batches = 20;
   double delta = 0.001;
   double rate = 0.001;
 
   // data dump of cost
-  double iters[num_iters];
-  double costs[num_iters];
+  double iters[NUM_ITERS];
+  double costs[NUM_ITERS];
 
   // randomize weights and biases
   nn_randomize_net(&knet, clamp_min, clamp_max);
@@ -132,7 +132,7 @@ int main()
   nn_arena_t arena_sgd;
   nn_arena_create(&arena_sgd, 10 * 1048576);
 
-  for (size_t i = 0; i < num_iters; i++)
+  for (size_t i = 0; i < NUM_ITERS; i++)
   {
     nn_training_data td_new;
     nn_create_sgd_traning_data(&arena_sgd, &td, &td_new, num_mini_batches);
@@ -146,7 +146,7 @@ int main()
 
   // dump cost vs iter plot data to file
   char cost_plot_data[100000];
-  plt_create_plot_data(cost_plot_data, ARRAY_SIZE(cost_plot_data), iters, costs, num_iters);
+  plt_create_plot_data(cost_plot_data, ARRAY_SIZE(cost_plot_data), iters, costs, NUM_ITERS);
   FILE *cost_plot_data_file = fopen("cost_plot_data.txt", "w");
   if (cost_plot_data_file == NULL)
   {
