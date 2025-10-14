@@ -80,7 +80,7 @@ double custom_cost_func_exp(nn_network_t *net, double *ex_input_data_point, doub
 
 double custom_cost_func(nn_network_t *net, double *ex_input_data_point, double *ex_output_data_point)
 {
-  return custom_cost_func_exp(net, ex_input_data_point, ex_output_data_point);
+  return custom_cost_func_linear(net, ex_input_data_point, ex_output_data_point);
 }
 
 int main()
