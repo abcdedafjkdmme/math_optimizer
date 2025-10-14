@@ -54,8 +54,8 @@ int main()
   nn_arena_t arena;
   nn_arena_create(&arena, 65536);
 
-//  nn_layer_t klayers[6];
-//  nn_network_t knet = {.layers = klayers, .num_layers = 0};
+  //  nn_layer_t klayers[6];
+  //  nn_network_t knet = {.layers = klayers, .num_layers = 0};
   nn_network_t knet = {};
 
   nn_add_layer(&arena, &knet, 1, NULL);
@@ -89,21 +89,21 @@ int main()
 
   double clamp_min = -1.0;
   double clamp_max = 1.0;
-  size_t num_iters = 500;
+#define NUM_ITERS 500
   size_t num_mini_batches = 20;
   double delta = 0.0001;
   double rate = 0.00001;
 
   // data dump of cost
-  double iters[num_iters];
-  double costs[num_iters];
+  double iters[NUM_ITERS];
+  double costs[NUM_ITERS];
 
   // randomize weights and biases
   nn_randomize_net(&knet, clamp_min, clamp_max);
   // create an arena for sgd traning data
   nn_arena_t arena_sgd;
   nn_arena_create(&arena_sgd, 10 * 1048576);
-  for (size_t i = 0; i < num_iters; i++)
+  for (size_t i = 0; i < NUM_ITERS; i++)
   {
     nn_training_data td_new;
     nn_create_sgd_traning_data(&arena_sgd, &td, &td_new, num_mini_batches);
@@ -115,7 +115,7 @@ int main()
   nn_arena_destroy(&arena_sgd);
   // dump cost vs iter plot data to file
   char cost_plot_data[10000];
-  plt_create_plot_data(cost_plot_data, ARRAY_SIZE(cost_plot_data), iters, costs, num_iters);
+  plt_create_plot_data(cost_plot_data, ARRAY_SIZE(cost_plot_data), iters, costs, NUM_ITERS);
   FILE *cost_plot_data_file = fopen("cost_plot_data.txt", "w");
   if (cost_plot_data_file == NULL)
   {
@@ -136,7 +136,6 @@ int main()
   printf("new      (input,output) is (%lf, %lf)\n", inputs2[0], outputs2[0]);
   printf("expected (input,output) is (%lf, %lf)\n", inputs2[0], training_func(inputs2[0]));
 
- 
   // create plot data
   char plot_data_str[5000];
   nn_arena_t plot_arena;
@@ -156,7 +155,7 @@ int main()
   int errcode = system("gnuplot -p data/plot.gp");
   assert(errcode == 0);
 
-   // destroy stuff
+  // destroy stuff
   nn_network_destroy(&knet);
   nn_arena_destroy(&arena);
   printf("program end \n");
